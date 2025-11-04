@@ -1,4 +1,5 @@
 import Dexie, { type Table} from 'dexie';
+import { ulid } from 'ulid';
 
 export type BlockType = 'text' | 'heading' | 'todo' | 'code'
 export type Block = {
@@ -37,3 +38,30 @@ class DexieDB extends Dexie {
 }
 
 export const db = new DexieDB();
+
+/**
+ * Create a new document
+ * @param title - The title of the document
+ * @returns The created document
+ */
+export async function createDoc(title: string = 'Untitled'): Promise<Document> {
+  const now = Date.now();
+  const doc: Document = {
+    id: ulid(),
+    title,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.documents.add(doc);
+  return doc;
+}
+
+/**
+ * Get a document by ID
+ * @param id - The document ID (ULID)
+ * @returns The document or undefined if not found
+ */
+export async function getDoc(id: string): Promise<Document | undefined> {
+  return await db.documents.get(id);
+}
