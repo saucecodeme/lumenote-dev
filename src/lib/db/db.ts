@@ -44,11 +44,11 @@ class DexieDB extends Dexie {
 export const db = new DexieDB();
 
 /**
- * Create a new document
+ * Create a new document with an initial empty block
  * @param title - The title of the document
- * @returns The created document
+ * @returns The created document with its initial block
  */
-export async function createDoc(title: string = 'Untitled'): Promise<Document> {
+export async function createDoc(title: string = 'Untitled'): Promise<DocumentWithBlocks> {
   const now = Date.now();
   const doc: Document = {
     id: ulid(),
@@ -57,8 +57,23 @@ export async function createDoc(title: string = 'Untitled'): Promise<Document> {
     updatedAt: now,
   };
 
+  const initialBlock: Block = {
+    id: ulid(),
+    docId: doc.id,
+    type: 'text',
+    content: '',
+    order: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
   await db.documents.add(doc);
-  return doc;
+  await db.blocks.add(initialBlock);
+
+  return {
+    ...doc,
+    blocks: [initialBlock],
+  };
 }
 
 /**
