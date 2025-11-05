@@ -287,7 +287,9 @@ function App() {
                     >
                       Delete
                     </button>
-                    <span className="text-xs text-gray-500 self-center">#{block.order}</span>
+                    <span className="text-xs text-gray-500 self-center font-mono" title={`Order key: ${block.order}`}>
+                      {block.order}
+                    </span>
                   </div>
                 </div>
                 <div className="text-gray-900">

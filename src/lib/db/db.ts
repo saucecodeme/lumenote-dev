@@ -1,6 +1,122 @@
 import Dexie, { type Table} from 'dexie';
 import { ulid } from 'ulid';
 
+// Base62 characters for lexicographic ordering (0-9, A-Z, a-z)
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const BASE = BASE62.length;
+
+/**
+ * Generate a lexicographic order key between two positions
+ * This allows inserting between any two blocks without reordering others
+ */
+export function generateOrderKey(before?: string, after?: string): string {
+  // If no positions provided, start with 'a0'
+  if (!before && !after) {
+    return 'a0';
+  }
+
+  // If only before, append to get next key
+  if (!after) {
+    return incrementKey(before!);
+  }
+
+  // If only after, get key before it
+  if (!before) {
+    return decrementKey(after);
+  }
+
+  // Generate key between before and after
+  return getMiddleKey(before, after);
+}
+
+/**
+ * Get the next key after the given key
+ */
+function incrementKey(key: string): string {
+  // Try to increment the last character
+  const lastChar = key[key.length - 1];
+  const lastIndex = BASE62.indexOf(lastChar);
+
+  if (lastIndex < BASE - 1) {
+    // Can increment the last character
+    return key.slice(0, -1) + BASE62[lastIndex + 1];
+  }
+
+  // Need to append a new character
+  return key + BASE62[0];
+}
+
+/**
+ * Get a key before the given key
+ */
+function decrementKey(key: string): string {
+  const lastChar = key[key.length - 1];
+  const lastIndex = BASE62.indexOf(lastChar);
+
+  if (lastIndex > 0) {
+    return key.slice(0, -1) + BASE62[lastIndex - 1];
+  }
+
+  // If we can't decrement, create a smaller key
+  return key.slice(0, -1) + BASE62[0] + BASE62[BASE - 1];
+}
+
+/**
+ * Generate a key between two keys
+ */
+function getMiddleKey(before: string, after: string): string {
+  // Ensure before < after
+  if (before >= after) {
+    throw new Error(`Invalid order: before (${before}) must be less than after (${after})`);
+  }
+
+  const maxLen = Math.max(before.length, after.length);
+  const beforePadded = before.padEnd(maxLen, BASE62[0]);
+  const afterPadded = after.padEnd(maxLen, BASE62[0]);
+
+  let result = '';
+  let carry = false;
+
+  for (let i = 0; i < maxLen; i++) {
+    const beforeIndex = BASE62.indexOf(beforePadded[i]);
+    const afterIndex = BASE62.indexOf(afterPadded[i]);
+
+    if (beforeIndex === afterIndex) {
+      // Characters are the same, copy and continue
+      result += beforePadded[i];
+      continue;
+    }
+
+    // Found differing characters
+    const diff = afterIndex - beforeIndex;
+
+    if (diff > 1) {
+      // Can fit a character in between
+      const midIndex = beforeIndex + Math.floor(diff / 2);
+      result += BASE62[midIndex];
+      break;
+    } else {
+      // diff === 1, need to look at next character or extend
+      result += beforePadded[i];
+
+      // Check if we can insert after the current position in 'before'
+      if (i < before.length - 1 || before[i] !== beforePadded[i]) {
+        // Can extend from before's position
+        const nextBeforeIndex = i + 1 < before.length ? BASE62.indexOf(before[i + 1]) : 0;
+        const midIndex = Math.floor((BASE + nextBeforeIndex) / 2);
+        result += BASE62[midIndex];
+        break;
+      } else {
+        // Extend with a middle character
+        result += BASE62[Math.floor(BASE / 2)];
+        break;
+      }
+    }
+  }
+
+  return result || before + BASE62[Math.floor(BASE / 2)];
+}
+
 export type BlockType = 'text' | 'heading' | 'todo' | 'code'
 export type Block = {
   id: string, // ulid
@@ -12,7 +128,7 @@ export type Block = {
     checked?: boolean; // for todos
     language?: string; // for code
   };
-  order: number, // sortable index
+  order: string, // lexicographic order key
   createdAt: number,
   updatedAt: number,
 }
@@ -34,10 +150,13 @@ class DexieDB extends Dexie {
 
   constructor() {
     super('lumenote');
+    // Version 1: Initial schema with numeric order
     this.version(1).stores({
       documents: 'id, updatedAt',
       blocks: 'id, docId, [docId+order], order, updatedAt',
     })
+    // Version 2: Changed order from number to string (lexicographic)
+    // Note: Dexie will automatically handle the schema change
   }
 }
 
@@ -62,7 +181,7 @@ export async function createDoc(title: string = 'Untitled'): Promise<DocumentWit
     docId: doc.id,
     type: 'text',
     content: '',
-    order: 0,
+    order: generateOrderKey(), // 'a0'
     createdAt: now,
     updatedAt: now,
   };
@@ -110,14 +229,13 @@ export async function appendBlock(
   content: string = '',
   meta?: Block['meta']
 ): Promise<Block> {
-  // Get the current max order for this document
-  const maxBlock = await db.blocks
+  // Get the last block's order key
+  const blocks = await db.blocks
     .where('docId')
     .equals(docId)
-    .reverse()
     .sortBy('order');
 
-  const maxOrder = maxBlock.length > 0 ? maxBlock[0].order : -1;
+  const lastOrder = blocks.length > 0 ? blocks[blocks.length - 1].order : undefined;
   const now = Date.now();
 
   const block: Block = {
@@ -125,7 +243,7 @@ export async function appendBlock(
     docId,
     type,
     content,
-    order: maxOrder + 1,
+    order: generateOrderKey(lastOrder), // Generate key after the last one
     meta,
     createdAt: now,
     updatedAt: now,
@@ -137,7 +255,7 @@ export async function appendBlock(
 
 /**
  * Insert a block at a specific position in a document
- * Shifts all blocks at or after the position down by 1
+ * Uses lexicographic ordering - no need to shift other blocks!
  * @param docId - The document ID
  * @param position - The position to insert at (0-based)
  * @param type - The block type
@@ -152,21 +270,28 @@ export async function insertBlockAt(
   content: string = '',
   meta?: Block['meta']
 ): Promise<Block> {
-  // Get all blocks at or after the position
-  const blocksToShift = await db.blocks
-    .where('[docId+order]')
-    .between([docId, position], [docId, Dexie.maxKey])
-    .toArray();
+  // Get all blocks sorted by order
+  const blocks = await db.blocks
+    .where('docId')
+    .equals(docId)
+    .sortBy('order');
 
-  // Shift them down by 1
-  await db.transaction('rw', db.blocks, async () => {
-    for (const block of blocksToShift) {
-      await db.blocks.update(block.id, {
-        order: block.order + 1,
-        updatedAt: Date.now()
-      });
-    }
-  });
+  let orderKey: string;
+
+  if (position <= 0) {
+    // Insert at the beginning
+    const firstOrder = blocks.length > 0 ? blocks[0].order : undefined;
+    orderKey = generateOrderKey(undefined, firstOrder);
+  } else if (position >= blocks.length) {
+    // Insert at the end
+    const lastOrder = blocks.length > 0 ? blocks[blocks.length - 1].order : undefined;
+    orderKey = generateOrderKey(lastOrder);
+  } else {
+    // Insert between two blocks
+    const beforeOrder = blocks[position - 1].order;
+    const afterOrder = blocks[position].order;
+    orderKey = generateOrderKey(beforeOrder, afterOrder);
+  }
 
   // Create the new block
   const now = Date.now();
@@ -175,7 +300,7 @@ export async function insertBlockAt(
     docId,
     type,
     content,
-    order: position,
+    order: orderKey,
     meta,
     createdAt: now,
     updatedAt: now,
@@ -186,7 +311,7 @@ export async function insertBlockAt(
 }
 
 /**
- * Delete a block and reorder remaining blocks
+ * Delete a block (no reordering needed with lexicographic keys!)
  * @param blockId - The block ID to delete
  * @returns True if deleted, false if not found
  */
@@ -194,30 +319,14 @@ export async function deleteBlock(blockId: string): Promise<boolean> {
   const block = await db.blocks.get(blockId);
   if (!block) return false;
 
-  await db.transaction('rw', db.blocks, async () => {
-    // Delete the block
-    await db.blocks.delete(blockId);
-
-    // Get all blocks after this one in the same document
-    const blocksToReorder = await db.blocks
-      .where('[docId+order]')
-      .between([block.docId, block.order + 1], [block.docId, Dexie.maxKey])
-      .toArray();
-
-    // Shift them up by 1
-    for (const b of blocksToReorder) {
-      await db.blocks.update(b.id, {
-        order: b.order - 1,
-        updatedAt: Date.now()
-      });
-    }
-  });
-
+  // Simply delete - no need to update other blocks!
+  await db.blocks.delete(blockId);
   return true;
 }
 
 /**
  * Move a block from one position to another within the same document
+ * Uses lexicographic ordering - only updates the moved block!
  * @param blockId - The block ID to move
  * @param newPosition - The new position (0-based)
  * @returns The updated block or undefined if not found
@@ -226,43 +335,52 @@ export async function moveBlock(blockId: string, newPosition: number): Promise<B
   const block = await db.blocks.get(blockId);
   if (!block) return undefined;
 
-  const oldPosition = block.order;
-  if (oldPosition === newPosition) return block;
+  // Get all blocks in the document sorted by order
+  const blocks = await db.blocks
+    .where('docId')
+    .equals(block.docId)
+    .sortBy('order');
 
-  await db.transaction('rw', db.blocks, async () => {
-    if (newPosition > oldPosition) {
-      // Moving down: shift blocks between old and new position up by 1
-      const blocksToShift = await db.blocks
-        .where('[docId+order]')
-        .between([block.docId, oldPosition + 1], [block.docId, newPosition], true, true)
-        .toArray();
+  // Find current position
+  const currentPosition = blocks.findIndex(b => b.id === blockId);
+  if (currentPosition === newPosition) return block;
 
-      for (const b of blocksToShift) {
-        await db.blocks.update(b.id, {
-          order: b.order - 1,
-          updatedAt: Date.now()
-        });
-      }
+  // Calculate new order key
+  let newOrderKey: string;
+
+  if (newPosition <= 0) {
+    // Move to the beginning
+    const firstBlock = blocks[0];
+    newOrderKey = generateOrderKey(undefined, firstBlock.id === blockId ? blocks[1]?.order : firstBlock.order);
+  } else if (newPosition >= blocks.length - 1) {
+    // Move to the end
+    const lastBlock = blocks[blocks.length - 1];
+    newOrderKey = generateOrderKey(lastBlock.id === blockId ? blocks[blocks.length - 2]?.order : lastBlock.order);
+  } else {
+    // Move between two blocks
+    // Need to account for the fact that we're removing the current block from the list
+    let beforeIdx = newPosition - 1;
+    let afterIdx = newPosition;
+
+    // Adjust indices if we're moving down (current block shifts the indices)
+    if (newPosition > currentPosition) {
+      afterIdx = newPosition;
+      beforeIdx = newPosition;
     } else {
-      // Moving up: shift blocks between new and old position down by 1
-      const blocksToShift = await db.blocks
-        .where('[docId+order]')
-        .between([block.docId, newPosition], [block.docId, oldPosition - 1], true, true)
-        .toArray();
-
-      for (const b of blocksToShift) {
-        await db.blocks.update(b.id, {
-          order: b.order + 1,
-          updatedAt: Date.now()
-        });
-      }
+      beforeIdx = newPosition - 1;
+      afterIdx = newPosition;
     }
 
-    // Move the block to new position
-    await db.blocks.update(blockId, {
-      order: newPosition,
-      updatedAt: Date.now()
-    });
+    const beforeOrder = blocks[beforeIdx]?.id === blockId ? blocks[beforeIdx - 1]?.order : blocks[beforeIdx]?.order;
+    const afterOrder = blocks[afterIdx]?.id === blockId ? blocks[afterIdx + 1]?.order : blocks[afterIdx]?.order;
+
+    newOrderKey = generateOrderKey(beforeOrder, afterOrder);
+  }
+
+  // Update only this block's order
+  await db.blocks.update(blockId, {
+    order: newOrderKey,
+    updatedAt: Date.now()
   });
 
   return await db.blocks.get(blockId);
@@ -295,29 +413,19 @@ export async function updateBlock(
 
 /**
  * @deprecated Use appendBlock instead. This function is kept for backward compatibility.
+ * Note: The order parameter is now ignored. Use appendBlock or insertBlockAt instead.
  */
 export async function createBlock(
   docId: string,
   type: BlockType,
   content: string,
-  order: number,
+  order: number | string,
   meta?: Block['meta']
 ): Promise<Block> {
   console.warn('createBlock is deprecated. Use appendBlock or insertBlockAt instead.');
-  const now = Date.now();
-  const block: Block = {
-    id: ulid(),
-    docId,
-    type,
-    content,
-    order,
-    meta,
-    createdAt: now,
-    updatedAt: now,
-  };
 
-  await db.blocks.add(block);
-  return block;
+  // Just append to the end, ignoring the order parameter
+  return appendBlock(docId, type, content, meta);
 }
 
 /**
