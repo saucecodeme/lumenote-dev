@@ -8,12 +8,24 @@ import LexicalErrorBoundary from '@lexical/react/LexicalErrorBoundary';
 import editorConfig from './config';
 import ToolbarPlugin from './plugins/ToolbarPlugin';
 import CheckListPlugin from './plugins/CheckListPlugin';
+import AutoSavePlugin from './plugins/AutoSavePlugin';
 import './styles.css';
 
-export default function LexicalEditor() {
+interface LexicalEditorProps {
+  docId: string | null;
+  initialEditorState?: string;
+}
+
+export default function LexicalEditor({ docId, initialEditorState }: LexicalEditorProps) {
+  // Create config with initial state if provided
+  const config = {
+    ...editorConfig,
+    editorState: initialEditorState || editorConfig.editorState,
+  };
+
   return (
     <div className="editor-container bg-white rounded-lg shadow-sm border border-gray-200 max-w-4xl mx-auto">
-      <LexicalComposer initialConfig={editorConfig}>
+      <LexicalComposer initialConfig={config}>
         <ToolbarPlugin />
         <div className="editor-inner relative">
           <RichTextPlugin
@@ -34,6 +46,7 @@ export default function LexicalEditor() {
           <ListPlugin />
           <LexicalCheckListPlugin />
           <CheckListPlugin />
+          <AutoSavePlugin docId={docId} />
         </div>
       </LexicalComposer>
     </div>

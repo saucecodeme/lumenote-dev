@@ -136,6 +136,7 @@ export type Block = {
 export type Document = {
   id: string, // ulid
   title: string,
+  editorState?: string, // Lexical editor state (JSON stringified)
   createdAt: number,
   updatedAt: number,
 }
@@ -454,4 +455,69 @@ export async function createBlock(
  */
 export async function getAllDocs(): Promise<Document[]> {
   return await db.documents.orderBy('updatedAt').reverse().toArray();
+}
+
+/**
+ * Update a document's title
+ * @param docId - The document ID
+ * @param title - The new title
+ * @returns The updated document or undefined if not found
+ */
+export async function updateDocTitle(docId: string, title: string): Promise<Document | undefined> {
+  const doc = await db.documents.get(docId);
+  if (!doc) return undefined;
+
+  await db.documents.update(docId, {
+    title,
+    updatedAt: Date.now(),
+  });
+
+  return await db.documents.get(docId);
+}
+
+/**
+ * Save Lexical editor state to a document
+ * @param docId - The document ID
+ * @param editorState - The Lexical editor state (JSON string)
+ * @returns True if saved successfully
+ */
+export async function saveEditorState(docId: string, editorState: string): Promise<boolean> {
+  const doc = await db.documents.get(docId);
+  if (!doc) return false;
+
+  await db.documents.update(docId, {
+    editorState,
+    updatedAt: Date.now(),
+  });
+
+  return true;
+}
+
+/**
+ * Load Lexical editor state from a document
+ * @param docId - The document ID
+ * @returns The editor state JSON string or null if not found
+ */
+export async function loadEditorState(docId: string): Promise<string | null> {
+  const doc = await db.documents.get(docId);
+  return doc?.editorState || null;
+}
+
+/**
+ * Delete a document and all its blocks
+ * @param docId - The document ID to delete
+ * @returns True if deleted, false if not found
+ */
+export async function deleteDoc(docId: string): Promise<boolean> {
+  const doc = await db.documents.get(docId);
+  if (!doc) return false;
+
+  await db.transaction('rw', [db.documents, db.blocks], async () => {
+    // Delete all blocks associated with this document
+    await db.blocks.where('docId').equals(docId).delete();
+    // Delete the document
+    await db.documents.delete(docId);
+  });
+
+  return true;
 }
