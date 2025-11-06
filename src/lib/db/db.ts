@@ -160,7 +160,27 @@ class DexieDB extends Dexie {
   }
 }
 
-export const db = new DexieDB();
+// Lazy initialization - only create DB instance when accessed (client-side only)
+let _db: DexieDB | null = null;
+
+export const getDB = (): DexieDB => {
+  // SSR guard: Only initialize on client side
+  if (typeof window === 'undefined') {
+    throw new Error('Database can only be accessed on the client side');
+  }
+
+  if (!_db) {
+    _db = new DexieDB();
+  }
+  return _db;
+};
+
+// For backward compatibility - use getter
+export const db = new Proxy({} as DexieDB, {
+  get(target, prop) {
+    return getDB()[prop as keyof DexieDB];
+  }
+});
 
 /**
  * Create a new document with an initial empty block

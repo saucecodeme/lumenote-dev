@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import ClientOnly from '@/components/ClientOnly'
 import {
   createDoc,
   getDoc,
@@ -16,6 +17,29 @@ import {
 export const Route = createFileRoute('/')({ component: App })
 
 function App() {
+  return (
+    <div className="min-h-screen p-10 bg-gray-50">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Lumenote DB Test</h1>
+        <Link
+          to="/editor"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Go to Editor
+        </Link>
+      </div>
+      <ClientOnly fallback={
+        <div className="text-center py-20">
+          <p className="text-gray-400">Loading database interface...</p>
+        </div>
+      }>
+        <DBTestUI />
+      </ClientOnly>
+    </div>
+  )
+}
+
+function DBTestUI() {
   const [allDocs, setAllDocs] = useState<Array<{ id: string; title: string }>>([])
   const [selectedDoc, setSelectedDoc] = useState<DocumentWithBlocks | null>(null)
   const [docTitle, setDocTitle] = useState('')
@@ -128,17 +152,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen p-10 bg-gray-50">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Lumenote DB Test</h1>
-        <Link
-          to="/editor"
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Go to Editor
-        </Link>
-      </div>
-
+    <>
       {message && (
         <div className="mb-6 p-4 bg-blue-100 text-blue-800 rounded-lg">
           {message}
@@ -311,6 +325,6 @@ function App() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import LexicalEditor from '@/components/Editor/LexicalEditor'
+import ClientOnly from '@/components/ClientOnly'
 import { ArrowLeft } from 'lucide-react'
 
 export const Route = createFileRoute('/editor')({
@@ -23,7 +24,13 @@ function EditorPage() {
         <p className="text-gray-600 text-center mb-8">
           A Notion-style editor with text, headings, and todo lists
         </p>
-        <LexicalEditor />
+        <ClientOnly fallback={
+          <div className="editor-container bg-white rounded-lg shadow-sm border border-gray-200 max-w-4xl mx-auto p-8 min-h-[400px] flex items-center justify-center">
+            <p className="text-gray-400">Loading editor...</p>
+          </div>
+        }>
+          <LexicalEditor />
+        </ClientOnly>
         <div className="mt-8 max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h2 className="text-xl font-semibold mb-4">Try these features:</h2>
           <ul className="space-y-2 text-gray-700">
