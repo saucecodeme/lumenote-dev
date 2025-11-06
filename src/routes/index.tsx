@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import {
   createDoc,
@@ -129,7 +129,15 @@ function App() {
 
   return (
     <div className="min-h-screen p-10 bg-gray-50">
-      <h1 className="text-3xl font-bold mb-8 text-gray-900">Lumenote DB Test</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Lumenote DB Test</h1>
+        <Link
+          to="/editor"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Go to Editor
+        </Link>
+      </div>
 
       {message && (
         <div className="mb-6 p-4 bg-blue-100 text-blue-800 rounded-lg">

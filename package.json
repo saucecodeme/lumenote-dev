@@ -9,7 +9,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@lexical/list": "^0.38.2",
     "@lexical/react": "^0.38.2",
+    "@lexical/rich-text": "^0.38.2",
+    "@lexical/selection": "^0.38.2",
+    "@lexical/utils": "^0.38.2",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/nitro-v2-vite-plugin": "^1.132.31",
     "@tanstack/react-devtools": "^0.7.0",
