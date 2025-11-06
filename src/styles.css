@@ -1,5 +1,4 @@
-@import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Cascadia+Mono:ital,wght@0,200..700;1,200..700&family=Cascadia+Code:ital,wght@0,200..700;1,200..700&display=swap');
+@import 'tailwindcss';
 
 @font-face {
   font-family: 'Paper Mono';
@@ -10,8 +9,14 @@
 }
 
 @theme inline {
-  --color-background: light-dark(oklch(0.9891 0.0212 98.11), oklch(0.2717 0.0142 261.68));
-  --color-foreground: light-dark(oklch(0.2717 0.0142 261.68), oklch(0.9891 0.0212 98.11));
+  --color-background: light-dark(
+    oklch(0.9891 0.0212 98.11),
+    oklch(0.2717 0.0142 261.68)
+  );
+  --color-foreground: light-dark(
+    oklch(0.2717 0.0142 261.68),
+    oklch(0.9891 0.0212 98.11)
+  );
 
   --font-sans: 'Cascadia Mono', monospace;
   --font-mono: 'Paper Mono', monospace;
@@ -33,4 +38,36 @@
   code {
     font-family: 'Cascadia Code', monospace;
   }
+}
+
+@layer components {
+  /* Use @layer components for reusable component classes */
+  /* Example: .btn, .card, .modal, etc. */
+  /*
+  .btn {
+    @apply px-4 py-2 rounded font-semibold;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow p-6;
+  }
+  */
+}
+
+@layer utilities {
+  /* Use @layer utilities for utility classes and modifiers */
+  .editor-placeholder {
+  }
+
+  /* Other utility examples */
+  /*
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  */
 }

@@ -119,10 +119,10 @@ function getMiddleKey(before: string, after: string): string {
 
 export type BlockType = 'text' | 'heading' | 'todo' | 'code'
 export type Block = {
-  id: string, // ulid
-  docId: string,
-  type: BlockType,
-  content: string,
+  id: string // ulid
+  docId: string
+  type: BlockType
+  content: string
   meta?: {
     level?: 1 | 2 | 3; // for headings
     checked?: boolean; // for todos
@@ -134,10 +134,10 @@ export type Block = {
 }
 
 export type Document = {
-  id: string, // ulid
-  title: string,
-  createdAt: number,
-  updatedAt: number,
+  id: string // ulid
+  title: string
+  createdAt: number
+  updatedAt: number
 }
 
 export type DocumentWithBlocks = Document & {
@@ -145,8 +145,8 @@ export type DocumentWithBlocks = Document & {
 }
 
 class DexieDB extends Dexie {
-  documents!: Table<Document, string>;
-  blocks!: Table<Block, string>;
+  documents!: Table<Document, string>
+  blocks!: Table<Block, string>
 
   constructor() {
     super('lumenote');
